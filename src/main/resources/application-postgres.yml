@@ -1,0 +1,26 @@
+# Supabase (hosted PostgreSQL). Activated with the "postgres" profile (run-supabase.ps1 does this).
+# Values come from environment variables, so no password is stored in this file.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://db.PASTE_PROJECT_REF.supabase.co:5432/postgres?sslmode=require}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+  jpa:
+    hibernate:
+      # "update" creates the tables on the first run and keeps your data afterwards.
+      ddl-auto: update
+sams:
+  demo-today: ${SAMS_DEMO_TODAY:2026-11-11}
+  # Demo rows are inserted only when the tables are empty.
+  seed-demo-data: ${SEED_DEMO_DATA:true}
+  cors:
+    allowed-origins: ${SAMS_CORS_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  # Where the reset link in the email points (your frontend address).
+  frontend-url: ${SAMS_FRONTEND_URL:http://localhost:5173}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:}

@@ -1,0 +1,5 @@
+target/
+.git
+*.ps1
+db/
+log.txt

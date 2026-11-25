@@ -1,0 +1,7 @@
+target/
+.idea/
+*.iml
+.vscode/
+log.txt
+run-supabase.ps1
+startup-error.txt

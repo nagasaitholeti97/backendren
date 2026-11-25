@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: sams-backend
+  # SMTP settings (used only when MAIL_ENABLED=true). Gmail example: host smtp.gmail.com, port 587, an App Password.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+  datasource:
+    url: jdbc:h2:mem:sams;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate.format_sql: false
+server:
+  port: ${PORT:8080}
+sams:
+  minimum-percentage: 75
+  # The sample data is built for 2026-11-11. Leave empty to use the real date once real data is loaded.
+  demo-today: "2026-11-11"
+  seed-demo-data: true
+  jwt:
+    secret: ${SAMS_JWT_SECRET:change-this-development-secret-to-at-least-32-characters}
+    ttl-minutes: 120
+  cors:
+    allowed-origins: "http://localhost:*,http://127.0.0.1:*"
