@@ -24,3 +24,4 @@ sams:
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:}
+    brevo-api-key: ${BREVO_API_KEY:}
