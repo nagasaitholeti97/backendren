@@ -8,6 +8,10 @@ import com.sams.security.JwtService;
 import io.jsonwebtoken.JwtException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HexFormat;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -132,19 +136,33 @@ public class AuthService {
         return session(acc);
     }
 
+    private record Otp(String hash, Instant expires, int[] tries) {}
+
+    private final Map<String, Otp> otps = new ConcurrentHashMap<>();
+    private final SecureRandom random = new SecureRandom();
+
+    private static String sha(String v) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(v.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** Always answers the same way so the endpoint cannot be used to find out which IDs exist. */
     @Transactional(readOnly = true)
     public Message forgot(ForgotRequest r) {
         find(r.identifier()).ifPresent(a -> {
-            log.info("Password reset requested for {}", a.getUserId());
+            log.info("Password reset code requested for {}", a.getUserId());
             String email = emailOf(a);
             if (email == null || email.isBlank()) return;
-            String link = frontendUrl + "/?reset=" + jwt.issueReset(a.getUserId(), version(a));
-            mail.send(email, "SAMS password reset",
-                "Hello,\n\nUse this link to set a new password (valid for 30 minutes, works once):\n" + link
-                + "\n\nIf you did not ask for this, ignore this email; your password has not changed.");
+            String code = String.format("%06d", random.nextInt(1_000_000));
+            otps.put(a.getUserId(), new Otp(sha(a.getUserId() + ":" + code), Instant.now().plusSeconds(600), new int[] {0}));
+            mail.send(email, "SAMS password reset code",
+                "Hello,\n\nYour SAMS verification code is: " + code
+                + "\n\nIt is valid for 10 minutes. If you did not ask for this, ignore this email; your password has not changed.");
         });
-        return new Message("If an account matches, a reset link has been sent to its email.");
+        return new Message("If an account matches, a 6-digit code has been sent to its email.");
     }
 
     private String emailOf(UserAccount a) {
@@ -152,30 +170,24 @@ public class AuthService {
             .or(() -> faculty.findById(a.getUserId()).map(Faculty::getEmail)).orElse(null);
     }
 
-    /** Changes when the password changes, so a reset link stops working after it is used. */
-    private static String version(UserAccount a) {
-        try {
-            byte[] h = MessageDigest.getInstance("SHA-256").digest(a.getPasswordHash().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(h).substring(0, 16);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
+    @Transactional
     public Message reset(ResetRequest r) {
-        try {
-            var claims = jwt.parse(r.token());
-            if (!"reset".equals(claims.get("purpose", String.class))) throw ApiException.badRequest("This reset link is not valid.");
-            UserAccount acc = accounts.findById(claims.getSubject())
-                .orElseThrow(() -> ApiException.badRequest("This reset link is not valid."));
-            if (!version(acc).equals(claims.get("pv", String.class))) {
-                throw ApiException.badRequest("This reset link was already used or has expired.");
-            }
-            acc.setPasswordHash(encoder.encode(r.newPassword()));
-            return new Message("Password changed. You can sign in now.");
-        } catch (JwtException | IllegalArgumentException e) {
-            throw ApiException.badRequest("This reset link is not valid or has expired.");
+        String bad = "The code is wrong or has expired. Ask for a new code.";
+        UserAccount acc = find(r.identifier()).orElseThrow(() -> ApiException.badRequest(bad));
+        Otp o = otps.get(acc.getUserId());
+        if (o == null || Instant.now().isAfter(o.expires()) || o.tries()[0] >= 5) {
+            otps.remove(acc.getUserId());
+            throw ApiException.badRequest(bad);
         }
+        if (!MessageDigest.isEqual(o.hash().getBytes(StandardCharsets.UTF_8),
+                sha(acc.getUserId() + ":" + r.otp().trim()).getBytes(StandardCharsets.UTF_8))) {
+            o.tries()[0]++;
+            throw ApiException.badRequest(bad);
+        }
+        otps.remove(acc.getUserId());
+        acc.setPasswordHash(encoder.encode(r.newPassword()));
+        accounts.save(acc);
+        return new Message("Password changed. You can sign in now.");
     }
 
     @Transactional(readOnly = true)
