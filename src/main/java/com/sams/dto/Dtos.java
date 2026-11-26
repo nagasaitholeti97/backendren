@@ -41,7 +41,8 @@ public final class Dtos {
     /** ID or email. */
     public record ForgotRequest(@NotBlank String identifier) {}
 
-    public record ResetRequest(@NotBlank String token,
+    public record ResetRequest(@NotBlank String identifier,
+                               @NotBlank @Size(min = 6, max = 6, message = "Enter the 6-digit code.") String otp,
                                @NotBlank @Size(min = 8, max = 72, message = "New password needs at least 8 characters.") String newPassword) {}
 
     public record VerifyPasswordRequest(@NotBlank String password) {}
